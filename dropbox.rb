@@ -85,7 +85,9 @@ class Dropbox
     token = extract_token(html, "https://dl-web.getdropbox.com/upload")
     raise "token not found on /upload" unless token
 
-    boundary = "DEAD01"
+    rawdata = open(file, "rb"){|f| f.read}
+
+    boundary = generate_boundary(rawdata)
     data = ""
     {"dest" => remote, "t" => token}.each do |k,v|
       data << "--#{boundary}\r\n"
@@ -97,7 +99,7 @@ class Dropbox
     data << %'Content-Disposition: form-data; name="file"; filename="#{File.basename(file)}"\r\n'
     data << "Content-Type: application/octet-stream\r\n"
     data << "\r\n"
-    data << open(file, "rb"){|f| f.read}
+    data << rawdata
     data << "\r\n"
     data << "--#{boundary}--\r\n"
 
@@ -152,5 +154,13 @@ class Dropbox
     scrap = $1
     return nil unless /name="t" value="(.+?)"/ =~ scrap
     return $1
+  end
+
+  # :nodoc:
+  def generate_boundary(str)
+    begin
+      boundary = "RubyDropbox#{rand(2**8).to_s(16)}"
+    end while str.include?(boundary)
+    boundary
   end
 end
