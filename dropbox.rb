@@ -81,7 +81,7 @@ class Dropbox
   #
   def upload(file, remote)
     login unless @login
-    html = send_request("https://www.getdropbox.com/upload?basic=1").body
+    html = send_request("https://www.getdropbox.com/home?upload=1").body
     token = extract_token(html, "https://dl-web.getdropbox.com/upload")
     raise "token not found on /upload" unless token
 
