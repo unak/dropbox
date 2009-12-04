@@ -31,7 +31,7 @@ require "uri"
 
 # == About this library
 #
-# A simple Dropbox ( http://www.getdropbox.com/ ) libyrary to upload files.
+# A simple Dropbox ( http://www.dropbox.com/ ) libyrary to upload files.
 # This library has been completely written from scratch, but ideas and logics
 # are inspired from Dropbox Uploader ( http://jaka.kubje.org/software/DropboxUploader/ ).
 #
@@ -63,10 +63,10 @@ class Dropbox
 
   # :nodoc:
   def login
-    html = send_request("https://www.getdropbox.com/login").body
+    html = send_request("https://www.dropbox.com/login").body
     token = extract_token(html, "/login")
     raise "token not found on /login" unless token
-    res = send_request("https://www.getdropbox.com/login", "login_email" => @email, "login_password" => @pass, "t" => token)
+    res = send_request("https://www.dropbox.com/login", "login_email" => @email, "login_password" => @pass, "t" => token)
     if res["location"] == "/home"
       @login = true
     else
@@ -81,8 +81,8 @@ class Dropbox
   #
   def upload(file, remote)
     login unless @login
-    html = send_request("https://www.getdropbox.com/home?upload=1").body
-    token = extract_token(html, "https://dl-web.getdropbox.com/upload")
+    html = send_request("https://www.dropbox.com/home?upload=1").body
+    token = extract_token(html, "https://dl-web.dropbox.com/upload")
     raise "token not found on /upload" unless token
 
     rawdata = open(file, "rb"){|f| f.read}
@@ -103,7 +103,7 @@ class Dropbox
     data << "\r\n"
     data << "--#{boundary}--\r\n"
 
-    res = send_request("https://dl-web.getdropbox.com/upload", data, boundary)
+    res = send_request("https://dl-web.dropbox.com/upload", data, boundary)
     if res.code[0] != ?2 && res.code[0] != ?3
       raise "upload failed #{res.code}:#{res.message}"
     end
