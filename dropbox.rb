@@ -85,23 +85,29 @@ class Dropbox
     token = extract_token(html, "https://dl-web.dropbox.com/upload")
     raise "token not found on /upload" unless token
 
-    rawdata = open(file, "rb"){|f| f.read}
-
+    stream = open(file, "rb")
+    rawdata = stream.read
+    filesize = rawdata.size
     boundary = generate_boundary(rawdata)
-    data = ""
+    rawdata = nil
+    stream.rewind
+
+    pre = ""
     {"dest" => remote, "t" => token}.each do |k,v|
-      data << "--#{boundary}\r\n"
-      data << %'Content-Disposition: form-data; name="#{k}"\r\n'
-      data << "\r\n"
-      data << %'#{v}\r\n'
+      pre << "--#{boundary}\r\n"
+      pre << %'Content-Disposition: form-data; name="#{k}"\r\n'
+      pre << "\r\n"
+      pre << %'#{v}\r\n'
     end
-    data << "--#{boundary}\r\n"
-    data << %'Content-Disposition: form-data; name="file"; filename="#{File.basename(file)}"\r\n'
-    data << "Content-Type: application/octet-stream\r\n"
-    data << "\r\n"
-    data << rawdata
-    data << "\r\n"
-    data << "--#{boundary}--\r\n"
+    pre << "--#{boundary}\r\n"
+    pre << %'Content-Disposition: form-data; name="file"; filename="#{File.basename(file)}"\r\n'
+    pre << "Content-Type: application/octet-stream\r\n"
+    pre << "\r\n"
+
+    post = "\r\n"
+    post << "--#{boundary}--\r\n"
+
+    data = PseudoIO.new(pre, [stream, filesize], post)
 
     res = send_request("https://dl-web.dropbox.com/upload", data, boundary)
     if res.code[0] != ?2 && res.code[0] != ?3
@@ -134,8 +140,10 @@ class Dropbox
       if params
         if boundary
           header["Content-Type"] = "multipart/form-data; boundary=#{boundary}"
-          header["Content-Length"] = params.size.to_s
-          result = https.post(uri.path, params, header)
+          req = Net::HTTP::Post.new(uri.path, header)
+          req.body_stream = params
+          req["Content-Length"] = params.size
+          result = https.request(req)
         else
           result = https.post(uri.path, params.map{|k,v| URI.encode("#{k}=#{v}")}.join("&"), header)
         end
@@ -162,5 +170,76 @@ class Dropbox
       boundary = "RubyDropbox#{rand(2**8).to_s(16)}"
     end while str.include?(boundary)
     boundary
+  end
+end
+
+#
+# This class provides a pseudo read-only IO, constructed from some strings and
+# ios.
+#
+class PseudoIO
+  require "stringio"
+
+  #
+  # PseudoIO.new(string or array, ...)
+  #
+  # string : an instance of String
+  # array : [stream, size]
+  #
+  def initialize(*args)
+    @totalsize = 0
+    @ios = []
+    args.each do |arg|
+      if arg.is_a? String
+        @ios << StringIO.new(arg)
+        @totalsize += arg.size
+      else
+        @ios << arg[0]
+        @totalsize += arg[1]
+      end
+    end
+  end
+
+  #
+  # pseudoIo.size -> integer
+  #
+  # Returns the total size of strings and streams
+  #
+  def size
+    @totalsize
+  end
+  alias length size
+
+  #
+  # pseudoIo.read([size, [buffer]]) -> string, buffer, or nil
+  #
+  # See IO#read.
+  #
+  def read(size = nil, result = nil)
+    if result
+      result.replace('')
+    else
+      result = ''
+    end
+    if size
+      return nil if @ios.empty?
+      until @ios.empty?
+        cur = @ios.first.read(size)
+        if cur
+          result << cur
+          break if cur.size >= size
+          size -= cur.size
+        end
+        @ios.shift.close
+      end
+    else
+      return "" if @ios.empty?
+      until @ios.empty?
+        io = @ios.shift
+        result << io.read
+        io.close
+      end
+    end
+    result
   end
 end
